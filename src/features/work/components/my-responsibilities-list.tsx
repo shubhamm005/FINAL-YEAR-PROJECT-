@@ -1,13 +1,45 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Icons } from '@/components/icons';
 import { myResponsibilitiesQueryOptions } from '@/features/work/api/queries';
-import type { MyResponsibility } from '@/features/work/api/types';
+import {
+  CATEGORY_LABELS,
+  PRIORITY_LABELS,
+  TASK_STATUS_LABELS,
+  type MyResponsibility
+} from '@/features/work/api/types';
+import { UpdateProgressSheet } from './update-progress-sheet';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────
+
+const PRIORITY_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+  high: 'destructive',
+  medium: 'default',
+  low: 'secondary'
+};
+
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
+  pending: 'outline',
+  in_progress: 'secondary',
+  completed: 'default',
+  verified: 'default'
+};
+
+function fmt(dateStr: string) {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  }).format(new Date(dateStr));
+}
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────
 
@@ -17,8 +49,12 @@ function ListSkeleton() {
       {[1, 2, 3].map((i) => (
         <div key={i} className='rounded-xl border p-5 space-y-3'>
           <Skeleton className='h-5 w-2/3' />
-          <Skeleton className='h-4 w-1/4' />
+          <div className='flex gap-1'>
+            <Skeleton className='h-4 w-16' />
+            <Skeleton className='h-4 w-16' />
+          </div>
           <Skeleton className='h-14 w-full' />
+          <Skeleton className='h-2 w-full rounded-full' />
           <Skeleton className='h-3 w-1/3' />
         </div>
       ))}
@@ -44,44 +80,116 @@ function EmptyState() {
   );
 }
 
-// ─── Single responsibility card ───────────────────────────────────────────
+// ─── Single card ──────────────────────────────────────────────────────────
 
 function ResponsibilityDetailCard({ item }: { item: MyResponsibility }) {
-  const assignedDate = new Intl.DateTimeFormat('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric'
-  }).format(new Date(item.assigned_at));
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const isOverdue =
+    item.due_date &&
+    item.task_status !== 'completed' &&
+    item.task_status !== 'verified' &&
+    new Date(item.due_date) < new Date();
 
   return (
-    <Card className='flex flex-col gap-0 transition-shadow hover:shadow-md'>
-      <CardHeader className='pb-3'>
-        <div className='flex items-start justify-between gap-2'>
+    <>
+      <Card className='flex flex-col gap-0 transition-shadow hover:shadow-md'>
+        <CardHeader className='pb-2'>
           <div className='flex items-start gap-2'>
             <Icons.clipboardCheck className='text-primary mt-0.5 h-4 w-4 shrink-0' />
-            <CardTitle className='text-base leading-snug'>{item.title}</CardTitle>
+            <CardTitle className='text-sm leading-snug'>{item.title}</CardTitle>
           </div>
-          <Badge variant={item.status === 'active' ? 'default' : 'secondary'} className='shrink-0'>
-            {item.status === 'active' ? 'Active' : 'Inactive'}
-          </Badge>
-        </div>
-      </CardHeader>
 
-      <CardContent className='flex flex-1 flex-col gap-4 pt-0'>
-        {/* Description */}
-        {item.description ? (
-          <CardDescription className='text-sm leading-relaxed'>{item.description}</CardDescription>
-        ) : (
-          <p className='text-muted-foreground text-sm italic'>No description provided.</p>
-        )}
+          {/* Badges */}
+          <div className='flex flex-wrap gap-1.5 pt-1'>
+            <Badge variant={PRIORITY_VARIANT[item.priority] ?? 'outline'} className='text-xs'>
+              {PRIORITY_LABELS[item.priority]}
+            </Badge>
+            <Badge variant='outline' className='text-xs'>
+              {CATEGORY_LABELS[item.category]}
+            </Badge>
+            <Badge variant={STATUS_VARIANT[item.task_status] ?? 'outline'} className='text-xs'>
+              {TASK_STATUS_LABELS[item.task_status]}
+            </Badge>
+          </div>
+        </CardHeader>
 
-        {/* Assigned date */}
-        <div className='mt-auto flex items-center gap-1.5 pt-2 border-t'>
-          <Icons.calendar className='text-muted-foreground h-3.5 w-3.5' />
-          <span className='text-muted-foreground text-xs'>Assigned on {assignedDate}</span>
-        </div>
-      </CardContent>
-    </Card>
+        <CardContent className='flex flex-1 flex-col gap-3 pt-0'>
+          {/* Description */}
+          {item.description ? (
+            <CardDescription className='text-xs leading-relaxed line-clamp-3'>
+              {item.description}
+            </CardDescription>
+          ) : (
+            <p className='text-muted-foreground text-xs italic'>No description provided.</p>
+          )}
+
+          {/* Progress */}
+          <div className='space-y-1'>
+            <div className='flex justify-between text-xs text-muted-foreground'>
+              <span>Progress</span>
+              <span className='font-medium tabular-nums'>{item.progress}%</span>
+            </div>
+            <Progress value={item.progress} className='h-2' />
+          </div>
+
+          {/* Remarks */}
+          {item.remarks && (
+            <div className='rounded-md bg-muted px-3 py-2'>
+              <p className='text-xs font-medium text-muted-foreground mb-0.5'>Remarks</p>
+              <p className='text-xs leading-relaxed line-clamp-2'>{item.remarks}</p>
+            </div>
+          )}
+
+          {/* Attachment */}
+          {item.attachment_url && (
+            <a
+              href={item.attachment_url}
+              target='_blank'
+              rel='noopener noreferrer'
+              className='flex items-center gap-1.5 text-xs text-primary hover:underline'
+            >
+              <Icons.paperclip className='h-3.5 w-3.5 shrink-0' />
+              View attachment
+            </a>
+          )}
+
+          {/* Dates */}
+          <div className='space-y-1 border-t pt-2'>
+            {item.due_date && (
+              <div
+                className={`flex items-center gap-1.5 text-xs ${isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}
+              >
+                <Icons.calendar className='h-3.5 w-3.5 shrink-0' />
+                <span>
+                  {isOverdue ? 'Overdue · ' : 'Due '}
+                  {fmt(item.due_date)}
+                </span>
+              </div>
+            )}
+            <div className='flex items-center gap-1.5 text-xs text-muted-foreground'>
+              <Icons.clock className='h-3.5 w-3.5 shrink-0' />
+              <span>Assigned {fmt(item.assigned_at)}</span>
+            </div>
+          </div>
+
+          {/* Update button */}
+          <Button
+            size='sm'
+            variant='outline'
+            className='mt-1 w-full gap-2'
+            onClick={() => setSheetOpen(true)}
+            disabled={item.task_status === 'verified'}
+          >
+            <Icons.edit className='h-3.5 w-3.5' />
+            {item.task_status === 'verified' ? 'Verified by HOD' : 'Update Progress'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Progress update sheet */}
+      <UpdateProgressSheet item={item} open={sheetOpen} onOpenChange={setSheetOpen} />
+    </>
   );
 }
 
@@ -111,7 +219,6 @@ export function MyResponsibilitiesList() {
 
   return (
     <div className='space-y-8'>
-      {/* Active */}
       {active.length > 0 && (
         <section className='space-y-3'>
           <div className='flex items-center gap-2'>
@@ -128,7 +235,6 @@ export function MyResponsibilitiesList() {
         </section>
       )}
 
-      {/* Inactive */}
       {inactive.length > 0 && (
         <section className='space-y-3'>
           <div className='flex items-center gap-2'>

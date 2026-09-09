@@ -2,18 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
-/**
- * GET /api/my-responsibilities
- *
- * Returns all responsibilities assigned to the signed-in teacher.
- *
- * Pattern:
- *  1. Verify identity using the regular server client (honours RLS / session)
- *  2. Fetch data using the admin client (bypasses RLS entirely — safe because
- *     we already verified the caller is authenticated and is a teacher)
- */
 export async function GET() {
-  // ── 1. Verify the caller is a signed-in teacher ──────────────────────
   const authClient = await createClient();
   const {
     data: { user },
@@ -24,12 +13,10 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const role = user.user_metadata?.role;
-  if (role !== 'teacher') {
+  if (user.user_metadata?.role !== 'teacher') {
     return NextResponse.json({ error: 'Forbidden — teachers only' }, { status: 403 });
   }
 
-  // ── 2. Fetch with admin client — no RLS, no recursion ────────────────
   let admin;
   try {
     admin = createAdminClient();
@@ -39,24 +26,18 @@ export async function GET() {
 
   const { data, error } = await admin
     .from('responsibility_assignments')
-    .select(
-      `
+    .select(`
       assigned_at,
       responsibilities (
-        id,
-        title,
-        description,
-        status,
-        created_at
+        id, title, description, category, priority,
+        task_status, progress, due_date, remarks,
+        attachment_url, status, created_at
       )
-    `
-    )
+    `)
     .eq('teacher_id', user.id)
     .order('assigned_at', { ascending: false });
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const responsibilities = (data ?? [])
     .filter((row: any) => row.responsibilities !== null)
@@ -64,6 +45,13 @@ export async function GET() {
       id: row.responsibilities.id,
       title: row.responsibilities.title,
       description: row.responsibilities.description,
+      category: row.responsibilities.category,
+      priority: row.responsibilities.priority,
+      task_status: row.responsibilities.task_status,
+      progress: row.responsibilities.progress ?? 0,
+      due_date: row.responsibilities.due_date,
+      remarks: row.responsibilities.remarks,
+      attachment_url: row.responsibilities.attachment_url,
       status: row.responsibilities.status,
       created_at: row.responsibilities.created_at,
       assigned_at: row.assigned_at

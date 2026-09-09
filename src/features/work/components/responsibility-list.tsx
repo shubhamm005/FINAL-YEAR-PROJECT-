@@ -17,16 +17,38 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Icons } from '@/components/icons';
 import { workKeys, responsibilitiesQueryOptions } from '@/features/work/api/queries';
 import { deleteResponsibility, updateResponsibility } from '@/features/work/api/service';
-import type { Responsibility } from '@/features/work/api/types';
+import {
+  CATEGORY_LABELS,
+  PRIORITY_LABELS,
+  TASK_STATUS_LABELS,
+  type Responsibility
+} from '@/features/work/api/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { AddResponsibilitySheet } from './add-responsibility-sheet';
+import { ResponsibilityDetailSheet } from './responsibility-detail-sheet';
+
+// ─── Priority colour helper ───────────────────────────────────────────────
+
+const PRIORITY_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+  high: 'destructive',
+  medium: 'default',
+  low: 'secondary'
+};
+
+const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
+  pending: 'outline',
+  in_progress: 'secondary',
+  completed: 'default',
+  verified: 'default'
+};
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────
 
@@ -41,7 +63,6 @@ function ListSkeleton() {
           <div className='flex gap-1 pt-2'>
             <Skeleton className='h-6 w-6 rounded-full' />
             <Skeleton className='h-6 w-6 rounded-full' />
-            <Skeleton className='h-6 w-6 rounded-full' />
           </div>
         </div>
       ))}
@@ -53,8 +74,6 @@ function ListSkeleton() {
 
 function ErrorState({ message }: { message: string }) {
   const msg = message.toLowerCase();
-
-  // Only show "run migration" if the table genuinely doesn't exist
   const isTableMissing =
     msg.includes('42p01') || (msg.includes('relation') && msg.includes('does not exist'));
 
@@ -65,8 +84,7 @@ function ErrorState({ message }: { message: string }) {
         <AlertDescription className='space-y-1'>
           <p className='font-semibold'>Database setup required</p>
           <p className='text-muted-foreground text-sm'>
-            Run the <strong>Work & Responsibility SQL migration</strong> in your Supabase SQL Editor
-            to create the required tables, then refresh this page.
+            Run the Work & Responsibility SQL migration in Supabase SQL Editor, then refresh.
           </p>
         </AlertDescription>
       </Alert>
@@ -110,10 +128,12 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 
 function ResponsibilityCard({
   item,
-  onEdit
+  onEdit,
+  onViewUpdates
 }: {
   item: Responsibility;
   onEdit: (item: Responsibility) => void;
+  onViewUpdates: (item: Responsibility) => void;
 }) {
   const qc = useQueryClient();
 
@@ -138,20 +158,31 @@ function ResponsibilityCard({
     onError: (e: Error) => toast.error(e.message)
   });
 
-  const MAX_VISIBLE = 4;
-  const visibleTeachers = item.assigned_teachers.slice(0, MAX_VISIBLE);
+  const MAX_VISIBLE = 3;
+  const visible = item.assigned_teachers.slice(0, MAX_VISIBLE);
   const extraCount = item.assigned_teachers.length - MAX_VISIBLE;
+
+  const dueDate = item.due_date
+    ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(
+        new Date(item.due_date)
+      )
+    : null;
+
+  const isOverdue =
+    item.due_date &&
+    item.task_status !== 'completed' &&
+    item.task_status !== 'verified' &&
+    new Date(item.due_date) < new Date();
 
   return (
     <Card className='group relative flex flex-col gap-0 transition-shadow hover:shadow-md'>
       <CardHeader className='pb-2'>
+        {/* Title row */}
         <div className='flex items-start justify-between gap-2'>
-          <div className='flex items-center gap-2'>
+          <div className='flex items-start gap-2 min-w-0'>
             <Icons.clipboardCheck className='text-primary mt-0.5 h-4 w-4 shrink-0' />
-            <CardTitle className='text-base leading-snug'>{item.title}</CardTitle>
+            <CardTitle className='text-sm leading-snug'>{item.title}</CardTitle>
           </div>
-
-          {/* Actions dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -159,7 +190,7 @@ function ResponsibilityCard({
                   variant='ghost'
                   size='icon-sm'
                   className='shrink-0 opacity-0 transition-opacity group-hover:opacity-100'
-                  aria-label='Responsibility actions'
+                  aria-label='Actions'
                 />
               }
             >
@@ -167,8 +198,7 @@ function ResponsibilityCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align='end' className='w-44'>
               <DropdownMenuItem onClick={() => onEdit(item)}>
-                <Icons.edit className='mr-2 h-4 w-4' />
-                Edit
+                <Icons.edit className='mr-2 h-4 w-4' /> Edit
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => toggleStatus.mutate()}>
                 {item.status === 'active' ? (
@@ -188,30 +218,64 @@ function ResponsibilityCard({
                 className='text-destructive focus:text-destructive'
                 onClick={() => remove.mutate()}
               >
-                <Icons.trash className='mr-2 h-4 w-4' />
-                Delete
+                <Icons.trash className='mr-2 h-4 w-4' /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
-        <Badge variant={item.status === 'active' ? 'default' : 'secondary'} className='w-fit'>
-          {item.status === 'active' ? 'Active' : 'Inactive'}
-        </Badge>
+        {/* Badges row */}
+        <div className='flex flex-wrap gap-1.5 pt-1'>
+          <Badge variant={PRIORITY_VARIANT[item.priority] ?? 'outline'} className='text-xs'>
+            {PRIORITY_LABELS[item.priority]}
+          </Badge>
+          <Badge variant='outline' className='text-xs'>
+            {CATEGORY_LABELS[item.category]}
+          </Badge>
+          <Badge variant={STATUS_VARIANT[item.task_status] ?? 'outline'} className='text-xs'>
+            {TASK_STATUS_LABELS[item.task_status]}
+          </Badge>
+        </div>
       </CardHeader>
 
-      <CardContent className='flex flex-1 flex-col gap-4 pt-0'>
+      <CardContent className='flex flex-1 flex-col gap-3 pt-0'>
+        {/* Description */}
         {item.description && (
-          <CardDescription className='text-sm leading-relaxed'>{item.description}</CardDescription>
+          <CardDescription className='line-clamp-2 text-xs leading-relaxed'>
+            {item.description}
+          </CardDescription>
         )}
 
-        <div className='mt-auto'>
+        {/* Progress bar */}
+        <div className='space-y-1'>
+          <div className='flex justify-between text-xs text-muted-foreground'>
+            <span>Progress</span>
+            <span>{item.progress}%</span>
+          </div>
+          <Progress value={item.progress} className='h-1.5' />
+        </div>
+
+        {/* Due date */}
+        {dueDate && (
+          <div
+            className={`flex items-center gap-1.5 text-xs ${isOverdue ? 'text-destructive' : 'text-muted-foreground'}`}
+          >
+            <Icons.calendar className='h-3.5 w-3.5 shrink-0' />
+            <span>
+              {isOverdue ? 'Overdue · ' : 'Due '}
+              {dueDate}
+            </span>
+          </div>
+        )}
+
+        {/* Assigned teachers */}
+        <div className='mt-auto flex items-center gap-2 border-t pt-2'>
           {item.assigned_teachers.length === 0 ? (
-            <p className='text-muted-foreground text-xs italic'>No teachers assigned yet</p>
+            <p className='text-muted-foreground text-xs italic'>No teachers assigned</p>
           ) : (
-            <div className='flex items-center gap-2'>
+            <>
               <AvatarGroup>
-                {visibleTeachers.map((t) => (
+                {visible.map((t) => (
                   <Avatar key={t.id} size='sm' title={t.full_name ?? t.email ?? ''}>
                     <AvatarImage src={t.avatar_url ?? ''} alt={t.full_name ?? ''} />
                     <AvatarFallback>
@@ -226,9 +290,20 @@ function ResponsibilityCard({
                   ? '1 teacher'
                   : `${item.assigned_teachers.length} teachers`}
               </span>
-            </div>
+            </>
           )}
         </div>
+
+        {/* View updates button */}
+        <Button
+          size='sm'
+          variant='outline'
+          className='w-full gap-2'
+          onClick={() => onViewUpdates(item)}
+        >
+          <Icons.clipboardCheck className='h-3.5 w-3.5' />
+          View Updates
+        </Button>
       </CardContent>
     </Card>
   );
@@ -250,14 +325,11 @@ export function ResponsibilityList({
   onSheetOpenChange
 }: ResponsibilityListProps) {
   const [editItem, setEditItem] = useState<Responsibility | null>(null);
+  const [detailItem, setDetailItem] = useState<Responsibility | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
-  // useQuery (not useSuspenseQuery) so errors are handled gracefully
-  // instead of crashing when DB tables don't exist yet.
   const { data, isLoading, error } = useQuery(
-    responsibilitiesQueryOptions({
-      search,
-      status: status as any
-    })
+    responsibilitiesQueryOptions({ search, status: status as any })
   );
 
   function handleEdit(item: Responsibility) {
@@ -270,9 +342,12 @@ export function ResponsibilityList({
     if (!open) setEditItem(null);
   }
 
-  // ── Render states ──────────────────────────────────────────────
-  let content: React.ReactNode;
+  function handleViewUpdates(item: Responsibility) {
+    setDetailItem(item);
+    setDetailOpen(true);
+  }
 
+  let content: React.ReactNode;
   if (isLoading) {
     content = <ListSkeleton />;
   } else if (error) {
@@ -283,7 +358,12 @@ export function ResponsibilityList({
     content = (
       <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3'>
         {data.responsibilities.map((item) => (
-          <ResponsibilityCard key={item.id} item={item} onEdit={handleEdit} />
+          <ResponsibilityCard
+            key={item.id}
+            item={item}
+            onEdit={handleEdit}
+            onViewUpdates={handleViewUpdates}
+          />
         ))}
       </div>
     );
@@ -296,6 +376,15 @@ export function ResponsibilityList({
         open={sheetOpen}
         onOpenChange={handleSheetChange}
         editItem={editItem}
+      />
+      <ResponsibilityDetailSheet
+        responsibilityId={detailItem?.id ?? null}
+        responsibilityTitle={detailItem?.title}
+        open={detailOpen}
+        onOpenChange={(v) => {
+          setDetailOpen(v);
+          if (!v) setDetailItem(null);
+        }}
       />
     </>
   );
