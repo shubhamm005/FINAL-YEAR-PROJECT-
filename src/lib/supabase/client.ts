@@ -1,0 +1,13 @@
+import { createBrowserClient } from '@supabase/ssr';
+
+/**
+ * Supabase browser client — use in Client Components and hooks.
+ * Call this function inside the component/hook, not at module level,
+ * so each render gets a fresh singleton tied to the current session.
+ */
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}

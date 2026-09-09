@@ -8,6 +8,7 @@ import {
   IconBox,
   IconBrandGithub,
   IconBrandTwitter,
+  IconBriefcase,
   IconBrightness,
   IconCalendar,
   IconCheck,
@@ -23,6 +24,7 @@ import {
   IconCircleCheck,
   IconCirclePlus,
   IconCircleX,
+  IconClipboardCheck,
   IconClipboardText,
   IconClock,
   IconCode,
@@ -83,6 +85,7 @@ import {
   IconUser,
   IconUserCircle,
   IconUserEdit,
+  IconUserCheck,
   IconUserX,
   IconUsers,
   IconVideo,
@@ -211,6 +214,11 @@ export const Icons = {
   toastWarning: IconAlertTriangle,
   toastError: IconCircleX,
   toastLoading: IconLoader2,
+
+  // Work & Responsibility
+  briefcase: IconBriefcase,
+  clipboardCheck: IconClipboardCheck,
+  userCheck: IconUserCheck,
 
   // Misc
   pizza: IconPizza,

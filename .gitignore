@@ -7,6 +7,7 @@
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+bun.lockb
 
 # testing
 /coverage
@@ -21,15 +22,20 @@ pnpm-lock.yaml
 # misc
 .DS_Store
 *.pem
+Thumbs.db
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
-.env*
+# local env files — NEVER commit these (contain secrets)
+.env
+.env.local
 .env*.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # vercel
 .vercel
@@ -38,14 +44,22 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# IDE
 .idea/
-# clerk configuration (can include secrets)
-/.clerk/
+.vscode/
+*.swp
+*.swo
 
-
-# cursor 
+# cursor
 .cursorrules
 /memory-bank
 
-# Sentry Config File
+# clerk configuration (can include secrets)
+/.clerk/
+
+# Sentry
 .env.sentry-build-plugin
+
+# OS
+.DS_Store
+desktop.ini

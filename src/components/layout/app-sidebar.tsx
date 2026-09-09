@@ -26,32 +26,49 @@ import {
 } from '@/components/ui/sidebar';
 import { UserAvatarProfile } from '@/components/user-avatar-profile';
 import { navGroups } from '@/config/nav-config';
+import { useMounted } from '@/hooks/use-mounted';
 import { useMediaQuery } from '@/hooks/use-media-query';
-import { useClerk, useOrganization, useUser } from '@clerk/nextjs';
 import { useFilteredNavGroups } from '@/hooks/use-nav';
+import { useSupabaseUser } from '@/hooks/use-supabase-user';
+import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { Icons } from '../icons';
-import { OrgSwitcher } from '../org-switcher';
+import { RoleBadge } from '../role-badge';
 
 export default function AppSidebar() {
   const pathname = usePathname();
   const { isOpen } = useMediaQuery();
-  const { user } = useUser();
-  const { organization } = useOrganization();
-  const { signOut } = useClerk();
   const router = useRouter();
+  const mounted = useMounted();
+  const { fullName, email, avatarUrl } = useSupabaseUser();
   const filteredGroups = useFilteredNavGroups(navGroups);
 
   React.useEffect(() => {
     // Side effects based on sidebar state changes
   }, [isOpen]);
 
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/auth/sign-in');
+  }
+
+  // Always render a stable user shape so the DOM tree is identical on
+  // server, initial client render, and post-mount — preventing hydration mismatches.
+  // After mount, swap in real data; before mount use empty strings (no visible change
+  // since the sidebar is inside a client-only authenticated layout).
+  const profileUser = {
+    fullName: mounted ? fullName : '',
+    emailAddresses: [{ emailAddress: mounted ? email : '' }],
+    imageUrl: mounted ? avatarUrl : ''
+  };
+
   return (
     <Sidebar collapsible='icon'>
       <SidebarHeader className='group-data-[collapsible=icon]:pt-4'>
-        <OrgSwitcher />
+        <RoleBadge />
       </SidebarHeader>
       <SidebarContent className='overflow-x-hidden'>
         {filteredGroups.map((group) => (
@@ -123,7 +140,7 @@ export default function AppSidebar() {
                   />
                 }
               >
-                {user && <UserAvatarProfile className='h-8 w-8 rounded-lg' showInfo user={user} />}
+                <UserAvatarProfile className='h-8 w-8 rounded-lg' showInfo user={profileUser} />
                 <Icons.chevronsDown className='ml-auto size-4' />
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -135,25 +152,20 @@ export default function AppSidebar() {
                 <DropdownMenuGroup>
                   <DropdownMenuLabel className='p-0 font-normal'>
                     <div className='px-1 py-1.5'>
-                      {user && (
-                        <UserAvatarProfile className='h-8 w-8 rounded-lg' showInfo user={user} />
-                      )}
+                      <UserAvatarProfile
+                        className='h-8 w-8 rounded-lg'
+                        showInfo
+                        user={profileUser}
+                      />
                     </div>
                   </DropdownMenuLabel>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={() => router.push('/dashboard/profile')}>
                     <Icons.account className='mr-2 h-4 w-4' />
                     Profile
                   </DropdownMenuItem>
-                  {organization && (
-                    <DropdownMenuItem onClick={() => router.push('/dashboard/billing')}>
-                      <Icons.creditCard className='mr-2 h-4 w-4' />
-                      Billing
-                    </DropdownMenuItem>
-                  )}
                   <DropdownMenuItem onClick={() => router.push('/dashboard/notifications')}>
                     <Icons.notification className='mr-2 h-4 w-4' />
                     Notifications
@@ -161,7 +173,7 @@ export default function AppSidebar() {
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={() => signOut({ redirectUrl: '/auth/sign-in' })}>
+                  <DropdownMenuItem onClick={handleSignOut}>
                     <Icons.logout aria-hidden className='mr-2 h-4 w-4' />
                     Sign out
                   </DropdownMenuItem>

@@ -1,11 +1,10 @@
 import { Icons } from '@/components/icons';
 
+export type AppRole = 'hod' | 'teacher';
+
 export interface PermissionCheck {
-  permission?: string;
-  plan?: string;
-  feature?: string;
-  role?: string;
-  requireOrg?: boolean;
+  /** Restrict visibility to users with this role ('hod' | 'teacher') */
+  role?: AppRole;
 }
 
 export interface NavItem {

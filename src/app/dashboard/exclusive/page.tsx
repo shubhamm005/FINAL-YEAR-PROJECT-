@@ -1,64 +1,52 @@
-'use client';
-
 import PageContainer from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useOrganization, Show } from '@clerk/nextjs';
-import { Icons } from '@/components/icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import Link from 'next/link';
+import { Icons } from '@/components/icons';
+import { createClient } from '@/lib/supabase/server';
 
-export default function ExclusivePage() {
-  const { organization, isLoaded } = useOrganization();
+export default async function ExclusivePage() {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  const isHod = user?.user_metadata?.role === 'hod';
+
+  if (!isHod) {
+    return (
+      <PageContainer pageTitle='Exclusive'>
+        <Alert>
+          <Icons.lock className='h-5 w-5 text-yellow-600' />
+          <AlertDescription>
+            <div className='mb-1 text-lg font-semibold'>HOD Access Required</div>
+            <div className='text-muted-foreground'>
+              This page is only available to the Head of Department.
+            </div>
+          </AlertDescription>
+        </Alert>
+      </PageContainer>
+    );
+  }
 
   return (
-    <PageContainer isLoading={!isLoaded}>
-      <Show
-        when={{ plan: 'pro' }}
-        fallback={
-          <div className='flex h-full items-center justify-center'>
-            <Alert>
-              <Icons.lock className='h-5 w-5 text-yellow-600' />
-              <AlertDescription>
-                <div className='mb-1 text-lg font-semibold'>Pro Plan Required</div>
-                <div className='text-muted-foreground'>
-                  This page is only available to organizations on the{' '}
-                  <span className='font-semibold'>Pro</span> plan.
-                  <br />
-                  Upgrade your subscription in&nbsp;
-                  <Link className='underline' href='/dashboard/billing'>
-                    Billing &amp; Plans
-                  </Link>
-                  .
-                </div>
-              </AlertDescription>
-            </Alert>
-          </div>
-        }
-      >
-        <div className='space-y-6'>
-          <div>
-            <h1 className='flex items-center gap-2 text-3xl font-bold tracking-tight'>
-              <Icons.badgeCheck className='h-7 w-7 text-green-600' />
-              Exclusive Area
-            </h1>
-            <p className='text-muted-foreground'>
-              Welcome, <span className='font-semibold'>{organization?.name}</span>! This page
-              contains exclusive features for Pro plan organizations.
-            </p>
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Thank You for Checking Out the Exclusive Page</CardTitle>
-              <CardDescription>
-                This means you belong to an organization subscribed to the Pro plan.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className='text-lg'>Have a wonderful day!</div>
-            </CardContent>
-          </Card>
+    <PageContainer pageTitle='Exclusive' pageDescription='HOD-only content area'>
+      <div className='space-y-6'>
+        <div className='flex items-center gap-2'>
+          <Icons.badgeCheck className='h-7 w-7 text-green-600' />
+          <h1 className='text-3xl font-bold tracking-tight'>Exclusive Area</h1>
         </div>
-      </Show>
+        <Card>
+          <CardHeader>
+            <CardTitle>HOD Exclusive Content</CardTitle>
+            <CardDescription>This area is restricted to the Head of Department.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className='text-muted-foreground text-sm'>
+              Add your HOD-specific features and content here.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     </PageContainer>
   );
 }

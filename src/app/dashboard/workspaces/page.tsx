@@ -1,28 +1,33 @@
-'use client';
-
 import PageContainer from '@/components/layout/page-container';
-import { OrganizationList } from '@clerk/nextjs';
-import { workspacesInfoContent } from '@/config/infoconfig';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { createClient } from '@/lib/supabase/server';
 
-export default function WorkspacesPage() {
+export default async function WorkspacesPage() {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  const role = user?.user_metadata?.role as string | undefined;
+  const fullName = user?.user_metadata?.full_name ?? user?.email ?? '—';
+
   return (
-    <PageContainer
-      pageTitle='Workspaces'
-      pageDescription='Manage your workspaces and switch between them'
-      infoContent={workspacesInfoContent}
-    >
-      <OrganizationList
-        appearance={{
-          elements: {
-            organizationListBox: 'space-y-2',
-            organizationPreview: 'rounded-lg border p-4 hover:bg-accent',
-            organizationPreviewMainIdentifier: 'text-lg font-semibold',
-            organizationPreviewSecondaryIdentifier: 'text-sm text-muted-foreground'
-          }
-        }}
-        afterSelectOrganizationUrl='/dashboard/workspaces/team'
-        afterCreateOrganizationUrl='/dashboard/workspaces/team'
-      />
+    <PageContainer pageTitle='Workspace' pageDescription='Your department workspace overview'>
+      <Card>
+        <CardHeader>
+          <CardTitle>Welcome, {fullName}</CardTitle>
+          <CardDescription>
+            {role === 'hod'
+              ? 'You have full department access as Head of Department.'
+              : 'You are signed in as a Teacher.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className='text-muted-foreground text-sm'>
+            Use the sidebar to navigate to your dashboard sections.
+          </p>
+        </CardContent>
+      </Card>
     </PageContainer>
   );
 }
